@@ -22,7 +22,7 @@ args = parser.parse_args()
 c = zlib.compressobj(9, zlib.DEFLATED, -15)
 header = 'BAM\x01\x1a\x00\x00\x00@SQ\tSN:chr1\tLN:1431655765\n\x01\x00\x00\x00\x05\x00\x00\x00chr1\x00UUUU'
 compressed_header = c.compress(header) + c.flush()
-output = (
+header = (
     '\x1f\x8b\x08\x04\x00\x00\x00\x00\x00\xff\x06\x00\x42\x43\x02\x00' + # bgzip magic 
     struct.pack("<H", len(compressed_header) + 25)                     + # size of the compressed block 
     compressed_header                                                  + # the compressed block
@@ -40,8 +40,8 @@ read = list(read)
 for permutation in args.read_permutations:
 	pos,val = permutation.split('=')
 	read[int(pos)] = chr(int(val))
-
 read = ''.join(read)
+
 reads = read * args.reads
 c = zlib.compressobj(9, zlib.DEFLATED, -15)
 compressed_reads = c.compress(reads) + c.flush()
@@ -58,29 +58,23 @@ final_reads = ''.join(final_reads)
 
 final_reads += compressed_reads
 final_reads += 'yolo' if args.test_four else struct.pack("<I", zlib.crc32(reads) & 0xffffffff )   # crc32 checksum
-final_reads += 'swag' if args.test_five else struct.pack("<I", len(reads))                                                      # size the data should be when unzipped
+final_reads += 'swag' if args.test_five else struct.pack("<I", len(reads))                        # size the data should be when unzipped
 
-for _ in range(args.blocks): output += final_reads
-
+final_reads *= args.blocks
+ 
 if args.test_three:
 	c = zlib.compressobj(9, zlib.DEFLATED, -15)
-	double_compressed_reads = c.compress(output) + c.flush()
+	double_compressed_reads = c.compress(header+final_reads) + c.flush()
 	if args.test_one: double_compressed_reads_len = 1
 	else:             double_compressed_reads_len = len(compressed_reads) + 25
 	if args.test_two: final_final_reads = '\x1f\x8b\x08\x04\x00\x00\x00\x00\x00\xff\x08\x00\x42\x43\x04\x00' + struct.pack("<I",compressed_reads_len)
 	else:             final_final_reads = '\x1f\x8b\x08\x04\x00\x00\x00\x00\x00\xff\x06\x00\x42\x43\x02\x00' + struct.pack("<H",compressed_reads_len)
-
-	final_reads = list(final_reads)
-	for permutation in args.gzip_permutations:
-		pos,val = permutation.split('=')
-		final_reads[int(pos)] = chr(int(val))
-	final_reads = ''.join(final_reads)
-
 	final_final_reads += double_compressed_reads
-	final_final_reads += 'yolo' if args.test_four else struct.pack("<I", zlib.crc32(output) & 0xffffffff )   # crc32 checksum
-	final_final_reads += 'swag' if args.test_five else struct.pack("<I", len(output))                                                      # size the data should be when unzipped
+	final_final_reads += 'yolo' if args.test_four else struct.pack("<I", zlib.crc32(header+final_reads) & 0xffffffff )   # crc32 checksum
+	final_final_reads += 'swag' if args.test_five else struct.pack("<I", len(header+final_reads))                        # size the data should be when unzipped
+
 	sys.stdout.write(final_final_reads)
 else:
-    sys.stdout.write(output)
+    sys.stdout.write(header + final_reads)
 # Write out with EOF
 sys.stdout.write('\x1f\x8b\x08\x04\x00\x00\x00\x00\x00\xff\x06\x00BC\x02\x00\x1b\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00')
